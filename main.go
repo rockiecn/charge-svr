@@ -17,7 +17,7 @@ func main() {
 	router.GET("/chargetest", chargetestHandler)
 	router.GET("/chargepro", chargeproHandler)
 
-	router.Run(":8003")
+	router.Run("0.0.0.0:8003")
 }
 
 // 获取所有用户
