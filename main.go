@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 
@@ -28,6 +29,7 @@ func main() {
 
 	// handlers
 	router.GET("/charge", chargeHandler)
+	router.GET("/query", queryHandler)
 
 	// run server
 	router.Run("0.0.0.0:8003")
@@ -145,5 +147,65 @@ func chargeHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"output1": string(output1),
 		"output2": string(output2),
+	})
+}
+
+// query size of a provider
+func queryHandler(c *gin.Context) {
+	// mefs provider id
+	id := c.Query("id")
+	if id == "" {
+		log.Printf("no id in request")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id must be set in request"})
+		return
+	}
+
+	// get chain
+	chain := c.Query("chain")
+	if chain != "test" && chain != "product" {
+		log.Printf("Error chain must set to test or product in request")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "chain must be set to test or product"})
+		return
+	}
+
+	// 构造命令
+	cmd := exec.Command(
+		"./contractsv2",
+		"get",
+		fmt.Sprintf("--ep=%s", chain),
+		"settleInfo",
+		id,
+		"0",
+	)
+
+	fmt.Println("querying provider size..")
+
+	// 执行查询命令并捕获输出
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Error executing first mefs command: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to execute first mefs command"})
+		return
+	}
+
+	fmt.Printf("query size result:\n%s\n", string(output))
+
+	strOut := string(output)
+	var strSize string
+
+	// 使用正则表达式匹配 "Size": 后面的数字
+	re := regexp.MustCompile(`"Size":\s*(\d+)`)
+	matches := re.FindStringSubmatch(strOut)
+
+	if len(matches) > 1 {
+		strSize = matches[1] // 匹配到的数字部分
+
+	} else {
+		fmt.Println("Size not found")
+	}
+
+	// 返回两条命令的输出
+	c.JSON(http.StatusOK, gin.H{
+		"size": strSize,
 	})
 }
